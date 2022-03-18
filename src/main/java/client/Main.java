@@ -18,6 +18,51 @@ public class Main {
 
     public static void main(String[] args) {
 
+//        actualExecution(args);
+        localExecution();
+
+    }
+
+    private static void actualExecution(String[] args){
+        try (Socket socket = new Socket(SERVER_ADDRESS, SERVER_PORT);
+             DataInputStream input = new DataInputStream(socket.getInputStream());
+             DataOutputStream output = new DataOutputStream(socket.getOutputStream());
+        ) {
+            System.out.println("Client started!");
+
+            Command command = null;
+            String key = null;
+            String value = null;
+            for (int i = 0; i < args.length - 1; i++) {
+                if (args[i].equals("-t")) {
+                    command = Command.valueOf(args[i+1].toUpperCase(Locale.ROOT));
+                }
+                if (args[i].equals("-k")) {
+                    key = args[i+1];
+                }
+                if (args[i].equals("-v")) {
+                    value = args[i+1];
+                }
+            }
+            Request request = new Request(command,key,value);
+
+            Gson gson = new GsonBuilder()
+                    .registerTypeAdapter(Request.class, new RequestSerializer())
+                    .registerTypeAdapter(Response.class, new ResponseDeserializer())
+                    .create();
+
+            String jsonRequest = gson.toJson(request);
+            output.writeUTF(jsonRequest);
+            System.out.println("Sent: " + jsonRequest);
+
+            String receivedMsg = input.readUTF();
+            System.out.println("Received: " + receivedMsg);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void localExecution() {
         for (int i = 0; i <= 7; i++) {
 
             try (Socket socket = new Socket(SERVER_ADDRESS, SERVER_PORT);
@@ -26,21 +71,6 @@ public class Main {
             ) {
                 System.out.println("Client started!");
 
-                Command command = null;
-                String key = null;
-                String value = null;
-//            for (int i = 0; i < args.length - 1; i++) {
-//                if (args[i].equals("-t")) {
-//                    command = Command.valueOf(args[i+1].toUpperCase(Locale.ROOT));
-//                }
-//                if (args[i].equals("-k")) {
-//                    key = args[i+1];
-//                }
-//                if (args[i].equals("-v")) {
-//                    value = args[i+1];
-//                }
-//            }
-//            Request request = new Request(command,key,value);
                 Request request = null;
 
                 Gson gson = new GsonBuilder()
@@ -83,6 +113,5 @@ public class Main {
             }
         }
     }
-
 
 }
