@@ -83,7 +83,7 @@ public class Main {
     private static Response save(String key, String value) {
         Map db = gson.fromJson(database, Map.class);
         db.put(key, value);
-        database = db.toString();
+        database = gson.toJson(db);
         return new Response("OK", null, null);
     }
 

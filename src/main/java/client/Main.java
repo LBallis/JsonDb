@@ -18,7 +18,7 @@ public class Main {
 
     public static void main(String[] args) {
 
-//        for (int i = 5; i <= 6; i++) {
+        for (int i = 0; i <= 7; i++) {
 
             try (Socket socket = new Socket(SERVER_ADDRESS, SERVER_PORT);
                  DataInputStream input = new DataInputStream(socket.getInputStream());
@@ -29,48 +29,48 @@ public class Main {
                 Command command = null;
                 String key = null;
                 String value = null;
-            for (int i = 0; i < args.length - 1; i++) {
-                if (args[i].equals("-t")) {
-                    command = Command.valueOf(args[i+1].toUpperCase(Locale.ROOT));
-                }
-                if (args[i].equals("-k")) {
-                    key = args[i+1];
-                }
-                if (args[i].equals("-v")) {
-                    value = args[i+1];
-                }
-            }
-            Request request = new Request(command,key,value);
-//                Request request = null;
+//            for (int i = 0; i < args.length - 1; i++) {
+//                if (args[i].equals("-t")) {
+//                    command = Command.valueOf(args[i+1].toUpperCase(Locale.ROOT));
+//                }
+//                if (args[i].equals("-k")) {
+//                    key = args[i+1];
+//                }
+//                if (args[i].equals("-v")) {
+//                    value = args[i+1];
+//                }
+//            }
+//            Request request = new Request(command,key,value);
+                Request request = null;
 
                 Gson gson = new GsonBuilder()
                         .registerTypeAdapter(Request.class, new RequestSerializer())
                         .registerTypeAdapter(Response.class, new ResponseDeserializer())
                         .create();
-//                if (i == 0) {
-//                    request = new Request(Command.GET, "1", null);
-//                }
-//                if (i == 1) {
-//                    request = new Request(Command.SET, "1", "HelloWorld!");
-//                }
-////                if (i == 2) {
-////                    request = new Request(Command.SET, "1", "Hello World!!");
-////                }
-//                if (i == 2) {
-//                    request = new Request(Command.GET, "1", null);
-//                }
-//                if (i == 3) {
-//                    request = new Request(Command.DELETE, "1", null);
-//                }
-//                if (i == 4) {
-//                    request = new Request(Command.DELETE, "1", null);
-//                }
-//                if (i == 5) {
-//                    request = new Request(Command.GET, "1", null);
-//                }
-//                if (i == 6) {
-//                    request = new Request(Command.EXIT, null, null);
-//                }
+                if (i == 0) {
+                    request = new Request(Command.GET, "1", null);
+                }
+                if (i == 1) {
+                    request = new Request(Command.SET, "1", "HelloWorld!");
+                }
+                if (i == 2) {
+                    request = new Request(Command.SET, "1", "Hello World!!");
+                }
+                if (i == 3) {
+                    request = new Request(Command.GET, "1", null);
+                }
+                if (i == 4) {
+                    request = new Request(Command.DELETE, "1", null);
+                }
+                if (i == 5) {
+                    request = new Request(Command.DELETE, "1", null);
+                }
+                if (i == 6) {
+                    request = new Request(Command.GET, "1", null);
+                }
+                if (i == 7) {
+                    request = new Request(Command.EXIT, null, null);
+                }
 
                 String jsonRequest = gson.toJson(request);
                 output.writeUTF(jsonRequest);
@@ -81,7 +81,7 @@ public class Main {
             } catch (IOException e) {
                 e.printStackTrace();
             }
-//        }
+        }
     }
 
 
