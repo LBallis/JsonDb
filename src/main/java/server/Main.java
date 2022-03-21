@@ -8,6 +8,12 @@ import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class Main {
 
@@ -17,18 +23,19 @@ public class Main {
             .registerTypeAdapter(Response.class, new ResponseSerializer())
             .create();
     static final int PORT = 5555;
-    static final String JSON_DATABASE_PATH = "database.json";
+    static final String JSON_DATABASE_PATH = "JSON Database/task/src/server/data/db.json";
     static boolean exit = false;
 
-    public static void main(String[] args) throws IOException, ClassNotFoundException {
-        if (new File(JSON_DATABASE_PATH).exists()){
-            database = (String) SerializationUtils.deserialize(JSON_DATABASE_PATH);
-        }else{
-            database = new HashMap<String,String>().toString();
-        }
+    static ReadWriteLock lock = new ReentrantReadWriteLock();
+    static Lock readLock = lock.readLock();
+    static Lock writeLock = lock.writeLock();
+
+    public static void main(String[] args) {
+        initDatabase();
 
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
             System.out.println("Server started!");
+
             while (!exit) {
                 serverClientCommunication(serverSocket);
             }
@@ -38,71 +45,116 @@ public class Main {
     }
 
     private static Response retrieve(String key) {
-        Map db = gson.fromJson(database, Map.class);
-        if (db.get(key) == null) {
-            return new Response("ERROR", "No such key", null);
+        synchronized (writeLock) {
+            readLock.lock();
+            Map db = gson.fromJson(database, Map.class);
+            readLock.unlock();
+            String value = (String) db.get(key);
+
+            if (value == null) {
+                return new Response("ERROR", "No such key", null);
+            }
+            return new Response("OK", null, value);
         }
-        return new Response("OK", null, (String) db.get(key));
     }
 
-    private static Response save(String key, String value) throws IOException {
-        Map db = gson.fromJson(database, Map.class);
-        db.put(key, value);
-        database = gson.toJson(db);
-        SerializationUtils.serialize(database,JSON_DATABASE_PATH);
+    private static Response save(String key, String value) {
+        synchronized (readLock) {
+            writeLock.lock();
+            Map db = gson.fromJson(database, Map.class);
+            db.put(key, value);
+            database = gson.toJson(db);
+            try {
+                SerializationUtils.serialize(database, JSON_DATABASE_PATH);
+                writeLock.unlock();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
         return new Response("OK", null, null);
     }
 
     private static Response delete(String key) {
+
         Map db = gson.fromJson(database, Map.class);
-        if (db.remove(key) == null) {
+        if (db.get(key) == null) {
             return new Response("ERROR", "No such key", null);
         }
-        database = db.toString();
+        writeLock.lock();
+        synchronized (readLock) {
+            db.remove(key);
+            database = db.toString();
+            try {
+                SerializationUtils.serialize(database, JSON_DATABASE_PATH);
+                writeLock.unlock();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
         return new Response("OK", null, null);
     }
 
+    private static void initDatabase() {
+        try {
+            if (new File(JSON_DATABASE_PATH).exists()) {
+                database = (String) SerializationUtils.deserialize(JSON_DATABASE_PATH);
+            } else {
+                database = new HashMap<String, String>().toString();
+            }
+        } catch (IOException | ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static Response executeRequest(Request request){
+        String key;
+        String value;
+        Response response = null;
+        switch (request.getType()) {
+            case GET:
+                key = request.getKey();
+                response = retrieve(key);
+                break;
+            case SET:
+                key = request.getKey();
+                value = request.getValue();
+                response = save(key, value);
+                break;
+            case DELETE:
+                key = request.getKey();
+                response = delete(key);
+                break;
+            case EXIT:
+                exit = true;
+                response = new Response("OK", null, null);
+                break;
+        }
+        return response;
+    }
 
     private static void serverClientCommunication(ServerSocket serverSocket) {
 
-        try (Socket socket = serverSocket.accept();
-             DataInputStream input = new DataInputStream(socket.getInputStream());
-             DataOutputStream output = new DataOutputStream(socket.getOutputStream());
-        ) {
-            String incomingMsg = input.readUTF();
-            Request request = gson.fromJson(incomingMsg, Request.class);
-            String key;
-            String value;
+        ExecutorService service = Executors.newFixedThreadPool(10);
 
-            Response response = null;
-
-            switch (request.getType()) {
-                case GET:
-                    key = request.getKey();
-                    response = retrieve(key);
-                    break;
-                case SET:
-                    key = request.getKey();
-                    value = request.getValue();
-                    response = save(key, value);
-                    break;
-                case DELETE:
-                    key = request.getKey();
-                    response = delete(key);
-                    break;
-                case EXIT:
-                    exit = true;
-                    response = new Response("OK", null, null);
-                    break;
+        service.submit(() -> {
+            try (Socket socket = serverSocket.accept();
+                 DataInputStream input = new DataInputStream(socket.getInputStream());
+                 DataOutputStream output = new DataOutputStream(socket.getOutputStream());
+            ) {
+                String incomingMsg = input.readUTF();
+                Request request = gson.fromJson(incomingMsg, Request.class);
+                Response response = executeRequest(request);
+                String jsonResponse = gson.toJson(response);
+                output.writeUTF(jsonResponse);
+            } catch (IOException | NumberFormatException e) {
+                e.printStackTrace();
             }
+        });
 
-            String jsonResponse = gson.toJson(response);
-
-
-            output.writeUTF(jsonResponse);
-        } catch (IOException | NumberFormatException e) {
+        try {
+            service.awaitTermination(5000, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
             e.printStackTrace();
         }
-
     }
 }
