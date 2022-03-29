@@ -1,33 +1,15 @@
 package client;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import com.google.gson.stream.JsonReader;
-import server.Command;
-import server.RequestDeserializer;
-import server.Response;
-import server.SerializationUtils;
+import com.beust.jcommander.JCommander;
 
 import java.io.*;
 import java.net.Socket;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.*;
 
 public class Main {
 
     static final String SERVER_ADDRESS = "0.0.0.0";
     static final int SERVER_PORT = 5555;
-    static final String INPUT_DATA_PATH = "JSON Database/task/src/client/data/";
-    static final Gson gson = new GsonBuilder()
-            .registerTypeAdapter(Request.class, new RequestSerializer())
-            .registerTypeAdapter(Request.class, new RequestDeserializer())
-            .registerTypeAdapter(Response.class, new ResponseDeserializer())
-            .create();
 
     public static void main(String[] args) {
 
@@ -36,127 +18,67 @@ public class Main {
 
     }
 
-    private static void actualExecution(String[] args){
-        Command command = null;
-        String key = null;
-        String value = null;
-        String fileName = null;
+    private static void actualExecution(String[] args) {
+        ExecutionArgs executionArgs = new ExecutionArgs();
+        JCommander jCommander = JCommander.newBuilder()
+                .addObject(executionArgs)
+                .build();
+        jCommander.parse(args);
 
-        for (int i = 0; i < args.length - 1; i++) {
-            if (args[i].equals("-in")){
-                fileName = args[i+1];
-            }
-            if (args[i].equals("-t")) {
-                command = Command.valueOf(args[i+1].toUpperCase(Locale.ROOT));
-            }
-            if (args[i].equals("-k")) {
-                key = args[i+1];
-            }
-            if (args[i].equals("-v")) {
-                value = args[i+1];
-            }
-        }
-        if (fileName == null){
-            Request request = new Request(command,key,value);
-            clientServerCommunication(request);
-        }else{
-            clientServerCommunication(readInput(fileName));
-        }
+        String request = executionArgs.toJson();
+
+        clientServerCommunication(request);
     }
 
     private static void localExecution() {
-        ExecutorService clientService = Executors.newFixedThreadPool(4);
-        for (int i = 0; i <= 1; i++) {
-            int finalI = i;
-            clientService.submit(() -> {
-                try (Socket socket = new Socket(SERVER_ADDRESS, SERVER_PORT);
-                     DataInputStream input = new DataInputStream(socket.getInputStream());
-                     DataOutputStream output = new DataOutputStream(socket.getOutputStream());
-                ) {
-                    System.out.println("Client started!");
+        ArrayList<String[]> argsList = new ArrayList<>();
+        argsList.add(new String[]{"-t", "exit"});
+//        argsList.add(new String[]{"-t", "get", "-k", "[text]"});
+//        argsList.add(new String[]{"-t", "set", "-k", "[1]", "-v", "Hello world!"});
+//        argsList.add(new String[]{"-t", "set", "-k", "1", "-v", "HelloWorld!"});
+//        argsList.add(new String[]{"-t", "get", "-k", "1"});
+//        argsList.add(new String[]{"-t", "delete", "-k", "1"});
+//        argsList.add(new String[]{"-t", "delete", "-k", "1"});
+//        argsList.add(new String[]{"-t", "get", "-k", "1"});
+//        argsList.add(new String[]{"-t", "set", "-k", "text", "-v", "Some text here"});
+//        argsList.add(new String[]{"-t", "get", "-k", "text"});
+//        argsList.add(new String[]{"-t", "get", "-k", "56"});
+//        argsList.add(new String[]{"-t", "delete", "-k", "100"});
+//        argsList.add(new String[]{"-t", "delete", "-k", "That key doesn't exist"});
+//        argsList.add(new String[]{"-in", "testSet.json"});
+//        argsList.add(new String[]{"-in", "testGet.json"});
+//        argsList.add(new String[]{"-in", "testDelete.json"});
+//        argsList.add(new String[]{"-in", "testGet.json"});
 
-                    Request request = null;
+        for (String[] args : argsList) {
+            ExecutionArgs executionArgs = new ExecutionArgs();
+            JCommander jCommander = JCommander.newBuilder()
+                    .addObject(executionArgs)
+                    .build();
+            jCommander.parse(args);
 
-                    Gson gson = new GsonBuilder()
-                            .registerTypeAdapter(Request.class, new RequestSerializer())
-                            .registerTypeAdapter(Response.class, new ResponseDeserializer())
-                            .create();
-//                    if (finalI == 1) {
-//                        request = new Request(Command.GET, "1", null);
-//                    }
-//                    if (finalI == 1) {
-//                        request = new Request(Command.SET, "1", "HelloWorld!");
-//                    }
-//                    if (finalI == 2) {
-//                        request = new Request(Command.SET, "1", "Hello World!!");
-//                    }
-//                    if (finalI == 3) {
-//                        request = new Request(Command.GET, "1", null);
-//                    }
-//                    if (finalI == 4) {
-//                        request = new Request(Command.DELETE, "1", null);
-//                    }
-//                    if (finalI == 5) {
-//                        request = new Request(Command.DELETE, "1", null);
-//                    }
-//                    if (finalI == 6) {
-//                        request = new Request(Command.GET, "1", null);
-//                    }
-                    if (finalI == 0) {
-                        request = new Request(Command.EXIT, null, null);
-                    }
+            String request = executionArgs.toJson();
 
-                    String jsonRequest = gson.toJson(request);
-
-                    output.writeUTF(jsonRequest);
-                    System.out.println("Sent: " + jsonRequest);
-                    String receivedMsg = input.readUTF();
-                    System.out.println("Received: " + receivedMsg);
-
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            });
-
+            clientServerCommunication(request);
         }
     }
 
-    private static Request readInput(String fileName) {
-        Request request = null;
-        String input = null;
-        try {
-            input = deserializeInput(INPUT_DATA_PATH + fileName);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        request = gson.fromJson(input, Request.class);
-        return request;
-    }
 
-    private static String deserializeInput(String fileName) throws FileNotFoundException {
-        JsonReader reader = new JsonReader(new FileReader(fileName));
-        reader.setLenient(true);
-        JsonObject json = (JsonObject) JsonParser.parseReader(reader);
-        return json.toString();
-    }
-
-    private static void clientServerCommunication(Request request) {
+    private static void clientServerCommunication(String request) {
         try (Socket socket = new Socket(SERVER_ADDRESS, SERVER_PORT);
              DataInputStream input = new DataInputStream(socket.getInputStream());
              DataOutputStream output = new DataOutputStream(socket.getOutputStream());
         ) {
             System.out.println("Client started!");
 
-            String jsonRequest = gson.toJson(request);
-            output.writeUTF(jsonRequest);
-            String receivedMsg = input.readUTF();
+            output.writeUTF(request);
+            System.out.println("Sent: " + request);
 
-            System.out.println("Sent: " + jsonRequest);
+            String receivedMsg = input.readUTF();
             System.out.println("Received: " + receivedMsg);
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
-
 
 }
