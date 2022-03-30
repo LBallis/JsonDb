@@ -1,27 +1,16 @@
 package server;
 
-import client.ExecutionArgs;
-
 import client.Request;
 import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonObject;
 import server.commands.DeleteCommand;
 import server.commands.GetCommand;
 import server.commands.SetCommand;
 import server.exceptions.NoSuchKeyException;
 
-import javax.print.attribute.standard.RequestingUserName;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import static server.Database.INSTANCE;
 
@@ -37,7 +26,7 @@ public class Main {
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
             System.out.println("Server started!");
 
-            while (!exit) {
+            while (!serverSocket.isClosed()) {
                 serverClientCommunication(serverSocket);
             }
         } catch (IOException e) {
@@ -86,9 +75,8 @@ public class Main {
     private static void serverClientCommunication(ServerSocket serverSocket) {
 
         Gson gson = new Gson();
-        ExecutorService service = Executors.newFixedThreadPool(10);
 
-        service.submit(() -> {
+        new Thread(() -> {
             try (Socket socket = serverSocket.accept();
                  DataInputStream input = new DataInputStream(socket.getInputStream());
                  DataOutputStream output = new DataOutputStream(socket.getOutputStream());
@@ -100,17 +88,11 @@ public class Main {
                 String jsonResponse = gson.toJson(response);
                 output.writeUTF(jsonResponse);
                 if (exit){
-                   System.exit(1);
+                   serverSocket.close();
                 }
             } catch (IOException | NumberFormatException e) {
                 e.printStackTrace();
             }
-        });
-
-        try {
-            service.awaitTermination(5000, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+        }).start();
     }
 }
